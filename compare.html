@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<title>Satellite Change Comparison</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+<style>
+
+#map{
+height:90vh;
+width:100%;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h2>Satellite Before / After Comparison</h2>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script>
+
+var map = L.map('map').setView([12.97,77.59],13)
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+maxZoom:19
+}).addTo(map)
+
+var before = L.imageOverlay(
+"sentinel_data/2015.png",
+[[12.80,77.40],[13.10,77.80]]
+).addTo(map)
+
+var after = L.imageOverlay(
+"sentinel_data/2026.png",
+[[12.80,77.40],[13.10,77.80]]
+).addTo(map)
+
+var change = L.imageOverlay(
+"sentinel_data/change_overlay.png",
+[[12.80,77.40],[13.10,77.80]]
+).addTo(map)
+
+after.setOpacity(0.5)
+
+</script>
+
+</body>
+</html>

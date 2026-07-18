@@ -15,6 +15,7 @@ packaging==26.0
 pillow==12.1.1
 pyparsing==3.3.2
 python-dateutil==2.9.0.post0
+rasterio==1.5.0
 setuptools==82.0.0
 six==1.17.0
 sympy==1.14.0

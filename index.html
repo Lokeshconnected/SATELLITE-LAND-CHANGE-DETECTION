@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<title>AI Satellite Land Change Detection</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+<style>
+
+#map{
+height:90vh;
+width:100%;
+}
+
+button{
+padding:10px;
+font-size:16px;
+margin:10px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h2>AI Land Change Detection</h2>
+
+<div id="map"></div>
+
+<button onclick="runAI()">Analyze Change</button>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script>
+
+var map = L.map('map').setView([20,78],5)
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+maxZoom:19
+}).addTo(map)
+
+var marker
+var overlay
+
+map.on('click',function(e){
+
+if(marker){
+map.removeLayer(marker)
+}
+
+marker = L.marker(e.latlng).addTo(map)
+
+window.lat = e.latlng.lat
+window.lon = e.latlng.lng
+
+})
+
+
+function runAI(){
+
+if(!window.lat){
+alert("Click on the map first")
+return
+}
+
+var url = "http://127.0.0.1:8000/analyze?lat="+window.lat+"&lon="+window.lon
+
+fetch(url)
+.then(res=>res.blob())
+.then(blob=>{
+
+var imgUrl = URL.createObjectURL(blob)
+
+if(overlay){
+map.removeLayer(overlay)
+}
+
+overlay = L.imageOverlay(
+imgUrl,
+[[window.lat-0.05,window.lon-0.05],[window.lat+0.05,window.lon+0.05]]
+).addTo(map)
+
+})
+
+}
+
+</script>
+
+</body>
+</html>
