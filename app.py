@@ -28,7 +28,9 @@ EARTH_ENGINE_PROJECT = os.getenv("EARTH_ENGINE_PROJECT", "satellite-change-ai-50
 EARTH_ENGINE_SERVICE_ACCOUNT_JSON = os.getenv("EARTH_ENGINE_SERVICE_ACCOUNT_JSON", "").strip()
 SEARCH_USER_AGENT = "satellite-change-detection-ai/1.0"
 MAX_MAP_RESULTS = 5
-DEFAULT_FETCH_DIMENSION = 768
+# Keep hosted requests within the memory and response-time limits of a small
+# web-service instance. The U-Net is resized to 256x256 for inference anyway.
+DEFAULT_FETCH_DIMENSION = 512
 DEFAULT_BUFFER_METERS = 2500
 SENTINEL_START_DATE = "2015-06-27"
 
@@ -207,11 +209,11 @@ def save_rgb_image(path: Path, image: np.ndarray) -> None:
 
 
 def save_heatmap(path: Path, image: np.ndarray, cmap: str = "magma") -> None:
-    plt.figure(figsize=(7, 7))
+    plt.figure(figsize=(5, 5))
     plt.imshow(image, cmap=cmap, vmin=0, vmax=1)
     plt.axis("off")
     plt.tight_layout(pad=0)
-    plt.savefig(path, dpi=220, bbox_inches="tight", pad_inches=0)
+    plt.savefig(path, dpi=160, bbox_inches="tight", pad_inches=0)
     plt.close()
 
 
@@ -712,7 +714,7 @@ def create_explanation_figure(
     figure_path = run_dir / "detailed_explanation.png"
     boxed_overlay = annotate_regions(overlay, regions)
 
-    fig = plt.figure(figsize=(18, 10), facecolor="white")
+    fig = plt.figure(figsize=(12, 7), facecolor="white")
     grid = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.1], height_ratios=[1, 1], wspace=0.08, hspace=0.16)
 
     ax_before = fig.add_subplot(grid[0, 0])
@@ -790,7 +792,7 @@ def create_explanation_figure(
     )
 
     fig.subplots_adjust(top=0.92, bottom=0.04, left=0.035, right=0.985)
-    fig.savefig(figure_path, dpi=260, bbox_inches="tight")
+    fig.savefig(figure_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     return f"/outputs/web_runs/{run_dir.name}/detailed_explanation.png"
 
