@@ -276,7 +276,7 @@ def fetch_place_suggestions(query: str) -> List[Dict[str, Any]]:
                 "limit": MAX_MAP_RESULTS,
                 "addressdetails": 1,
             },
-            headers={"User-Agent": SEARCH_USER_AGENT},
+            headers={"User-Agent": SEARCH_USER_AGENT, "Accept-Language": "en"},
             timeout=20,
         )
         response.raise_for_status()
@@ -307,6 +307,40 @@ def fetch_place_suggestions(query: str) -> List[Dict[str, Any]]:
                 "lat": lat,
                 "lon": lon,
                 "bounds": bounds,
+            }
+        )
+
+    if results:
+        return results
+
+    # Nominatim may have no matching administrative record for a neighbourhood.
+    # Fall back to Open-Meteo's city search so users can still select a nearby
+    # location and run an analysis.
+    try:
+        fallback_response = requests.get(
+            "https://geocoding-api.open-meteo.com/v1/search",
+            params={"name": query_value, "count": MAX_MAP_RESULTS, "language": "en", "format": "json"},
+            timeout=20,
+        )
+        fallback_response.raise_for_status()
+        fallback_payload = fallback_response.json()
+    except (requests.RequestException, ValueError):
+        fallback_payload = {}
+
+    for item in fallback_payload.get("results", []):
+        try:
+            lat = float(item["latitude"])
+            lon = float(item["longitude"])
+        except (KeyError, TypeError, ValueError):
+            continue
+
+        name_parts = [item.get("name"), item.get("admin1"), item.get("country")]
+        results.append(
+            {
+                "name": ", ".join(part for part in name_parts if part),
+                "lat": lat,
+                "lon": lon,
+                "bounds": None,
             }
         )
 
