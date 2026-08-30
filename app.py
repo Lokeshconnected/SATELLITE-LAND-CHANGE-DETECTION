@@ -14,7 +14,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from PIL import Image, ImageOps
+from PIL import Image, ImageDraw, ImageOps
 
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_ROOT = BASE_DIR / "outputs" / "web_runs"
@@ -81,13 +81,8 @@ def load_analysis_dependencies() -> None:
     if "np" in globals():
         return
 
-    os.environ.setdefault("MPLCONFIGDIR", str(BASE_DIR / ".matplotlib_cache"))
-
     import cv2 as cv2_module
     import ee as ee_module
-    import matplotlib as matplotlib_module
-    matplotlib_module.use("Agg")
-    import matplotlib.pyplot as plt_module
     import numpy as np_module
     import torch as torch_module
     import torch.nn.functional as f_module
@@ -96,8 +91,6 @@ def load_analysis_dependencies() -> None:
     globals().update(
         cv2=cv2_module,
         ee=ee_module,
-        matplotlib=matplotlib_module,
-        plt=plt_module,
         np=np_module,
         torch=torch_module,
         F=f_module,
@@ -209,12 +202,9 @@ def save_rgb_image(path: Path, image: np.ndarray) -> None:
 
 
 def save_heatmap(path: Path, image: np.ndarray, cmap: str = "magma") -> None:
-    plt.figure(figsize=(5, 5))
-    plt.imshow(image, cmap=cmap, vmin=0, vmax=1)
-    plt.axis("off")
-    plt.tight_layout(pad=0)
-    plt.savefig(path, dpi=160, bbox_inches="tight", pad_inches=0)
-    plt.close()
+    grayscale = np.clip(image * 255.0, 0, 255).astype(np.uint8)
+    colored = cv2.applyColorMap(grayscale, cv2.COLORMAP_MAGMA)
+    Image.fromarray(cv2.cvtColor(colored, cv2.COLOR_BGR2RGB)).save(path)
 
 
 def save_mask(path: Path, mask: np.ndarray) -> None:
@@ -714,86 +704,28 @@ def create_explanation_figure(
     figure_path = run_dir / "detailed_explanation.png"
     boxed_overlay = annotate_regions(overlay, regions)
 
-    fig = plt.figure(figsize=(12, 7), facecolor="white")
-    grid = fig.add_gridspec(2, 3, width_ratios=[1, 1, 1.1], height_ratios=[1, 1], wspace=0.08, hspace=0.16)
+    def as_rgb(array: np.ndarray) -> Image.Image:
+        return Image.fromarray((np.clip(array, 0, 1) * 255).astype(np.uint8))
 
-    ax_before = fig.add_subplot(grid[0, 0])
-    ax_after = fig.add_subplot(grid[0, 1])
-    ax_prob = fig.add_subplot(grid[1, 0])
-    ax_overlay = fig.add_subplot(grid[1, 1])
-    ax_summary = fig.add_subplot(grid[:, 2])
-
-    fig.suptitle(f"Deep Learning Change Analysis: {year_before} to {year_after}", fontsize=22, weight="bold", y=0.98)
-
-    ax_before.imshow(display_before)
-    ax_before.set_title(f"Before Image ({year_before})", fontsize=13, weight="bold")
-
-    ax_after.imshow(display_after)
-    ax_after.set_title(f"After Image ({year_after})", fontsize=13, weight="bold")
-
-    prob_plot = ax_prob.imshow(probability_full, cmap="magma", vmin=0, vmax=1)
-    ax_prob.contour(mask, levels=[0.5], colors="white", linewidths=0.8)
-    ax_prob.set_title("U-Net Change Probability", fontsize=13, weight="bold")
-    cbar = fig.colorbar(prob_plot, ax=ax_prob, fraction=0.046, pad=0.02)
-    cbar.set_label("Change probability", fontsize=9)
-
-    ax_overlay.imshow(boxed_overlay)
-    ax_overlay.set_title("Final Change Overlay and Regions", fontsize=13, weight="bold")
-
-    for axis in [ax_before, ax_after, ax_prob, ax_overlay]:
-        axis.set_xticks([])
-        axis.set_yticks([])
-
-    ax_summary.axis("off")
-    ax_summary.set_title("Explanation Summary", loc="left", fontsize=16, weight="bold", pad=12)
-
-    rows = [
-        ("Deep model", "6-channel U-Net on before/after RGB"),
-        ("Model resize", "Inputs resized to 256 x 256 for inference"),
-        ("Model threshold", f"Probability >= {MODEL_THRESHOLD:.2f}"),
-        ("Hybrid threshold", f"Adaptive score >= {hybrid_threshold:.2f}"),
-        ("Changed area", f"{summary['changed_percent']:.2f}% of pixels"),
-        ("Stable area", f"{summary['stable_percent']:.2f}% of pixels"),
-        ("Vegetation gain", f"{summary['vegetation_gain_percent']:.2f}%"),
-        ("Vegetation loss", f"{summary['vegetation_loss_percent']:.2f}%"),
-        ("Water-related change", f"{summary['water_related_percent']:.2f}%"),
-        ("Detected regions", str(summary["detected_regions"])),
+    probability_gray = np.clip(probability_full * 255.0, 0, 255).astype(np.uint8)
+    probability_rgb = cv2.cvtColor(cv2.applyColorMap(probability_gray, cv2.COLORMAP_MAGMA), cv2.COLOR_BGR2RGB)
+    panels = [
+        (f"Before ({year_before})", as_rgb(display_before)),
+        (f"After ({year_after})", as_rgb(display_after)),
+        ("U-Net change probability", Image.fromarray(probability_rgb)),
+        (f"Changes: {summary['changed_percent']:.2f}%", as_rgb(boxed_overlay)),
     ]
-
-    y = 0.90
-    for label, value in rows:
-        ax_summary.text(0.02, y, label, transform=ax_summary.transAxes, fontsize=10, color="#3a3a3a")
-        ax_summary.text(0.54, y, value, transform=ax_summary.transAxes, fontsize=10.5, weight="bold", color="#111111")
-        y -= 0.062
-
-    ax_summary.text(0.02, 0.26, "Top Regions", transform=ax_summary.transAxes, fontsize=12, weight="bold", color="#111111")
-    y = 0.21
-    if not regions:
-        ax_summary.text(0.02, y, "No large regions passed the final threshold.", transform=ax_summary.transAxes, fontsize=10)
-    else:
-        for index, region in enumerate(regions[:4], start=1):
-            area_percent = 100.0 * region["area"] / max(summary["total_pixels"], 1)
-            text = (
-                f"R{index}: {classify_region(region)} | "
-                f"area {area_percent:.2f}% | mean prob {region['mean_probability']:.3f}"
-            )
-            ax_summary.text(0.02, y, text, transform=ax_summary.transAxes, fontsize=9.1, color="#222222", wrap=True)
-            y -= 0.05
-
-    ax_summary.text(
-        0.02,
-        0.03,
-        "Method: the saved U-Net predicts change probability from two RGB images. A hybrid score then combines "
-        "the deep-learning output with image-difference cues to improve robustness on uploaded screenshots or map exports.",
-        transform=ax_summary.transAxes,
-        fontsize=8.8,
-        color="#555555",
-        wrap=True,
-    )
-
-    fig.subplots_adjust(top=0.92, bottom=0.04, left=0.035, right=0.985)
-    fig.savefig(figure_path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
+    width, height = panels[0][1].size
+    header_height = 28
+    canvas = Image.new("RGB", (width * 2, (height + header_height) * 2), "white")
+    draw = ImageDraw.Draw(canvas)
+    for index, (label, panel) in enumerate(panels):
+        x = (index % 2) * width
+        y = (index // 2) * (height + header_height)
+        draw.rectangle((x, y, x + width, y + header_height), fill=(24, 47, 73))
+        draw.text((x + 8, y + 7), label, fill="white")
+        canvas.paste(panel, (x, y + header_height))
+    canvas.save(figure_path, optimize=True)
     return f"/outputs/web_runs/{run_dir.name}/detailed_explanation.png"
 
 
