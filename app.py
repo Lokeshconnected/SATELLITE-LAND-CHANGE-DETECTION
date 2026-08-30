@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import io
 import json
 import logging
@@ -7,25 +9,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-os.environ.setdefault("MPLCONFIGDIR", os.path.join(os.getcwd(), ".matplotlib_cache"))
-
-import cv2
-import ee
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
 import requests
-import torch
-import torch.nn.functional as F
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps
-
-from unet_model import UNet
-
 
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_ROOT = BASE_DIR / "outputs" / "web_runs"
@@ -81,11 +70,40 @@ def load_model() -> UNet:
 
 # Do not load the model during module import. Hosted platforms must see the web
 # server bind its port promptly; inference can load the small model on demand.
-MODEL: Optional[UNet] = None
+MODEL: Optional[Any] = None
 EE_INITIALIZED = False
 
 
-def get_model() -> UNet:
+def load_analysis_dependencies() -> None:
+    """Import slow scientific packages only when an analysis is requested."""
+    if "np" in globals():
+        return
+
+    os.environ.setdefault("MPLCONFIGDIR", str(BASE_DIR / ".matplotlib_cache"))
+
+    import cv2 as cv2_module
+    import ee as ee_module
+    import matplotlib as matplotlib_module
+    matplotlib_module.use("Agg")
+    import matplotlib.pyplot as plt_module
+    import numpy as np_module
+    import torch as torch_module
+    import torch.nn.functional as f_module
+    from unet_model import UNet as unet_model_class
+
+    globals().update(
+        cv2=cv2_module,
+        ee=ee_module,
+        matplotlib=matplotlib_module,
+        plt=plt_module,
+        np=np_module,
+        torch=torch_module,
+        F=f_module,
+        UNet=unet_model_class,
+    )
+
+
+def get_model() -> Any:
     global MODEL
     if MODEL is None:
         MODEL = load_model()
@@ -94,6 +112,7 @@ def get_model() -> UNet:
 
 def ensure_earth_engine_initialized() -> None:
     global EE_INITIALIZED
+    load_analysis_dependencies()
     if EE_INITIALIZED:
         return
 
@@ -889,6 +908,7 @@ def analyze(
     before_image: UploadFile = File(...),
     after_image: UploadFile = File(...),
 ) -> Dict[str, Any]:
+    load_analysis_dependencies()
     before_year_value = slugify_year(before_year, "2015")
     after_year_value = slugify_year(after_year, "2026")
     validate_year_order(before_year_value, after_year_value)
@@ -912,6 +932,7 @@ def analyze_place(
     after_year: str = Form(...),
     buffer_km: float = Form(2.5),
 ) -> Dict[str, Any]:
+    load_analysis_dependencies()
     before_year_value = validate_search_year(before_year, "2016")
     after_year_value = validate_search_year(after_year, "2024")
     validate_year_order(str(before_year_value), str(after_year_value))
