@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import uuid
 from datetime import datetime
@@ -766,6 +767,38 @@ def build_response_payload(
         "You can use the heatmap to explain model confidence and the overlay to explain where the final detected changes lie."
     )
 
+    report = {
+        "run_id": run_id,
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "years": {"before": year_before, "after": year_after},
+        "model": {
+            "name": "U-Net change detector",
+            "input_shape": list(products["model_input_shape"]),
+            "probability_threshold": MODEL_THRESHOLD,
+            "hybrid_threshold": products["adaptive_threshold"],
+        },
+        "summary": summary,
+        "top_regions": top_regions,
+        "explanation": explanation_lines,
+    }
+    if context:
+        report["context"] = context
+    (run_dir / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+
+    csv_lines = ["region,label,area_percent,mean_probability,brightness_delta,vegetation_delta"]
+    for region in top_regions:
+        csv_lines.append(
+            ",".join([
+                region["id"],
+                json.dumps(region["label"]),
+                f"{region['area_percent']:.6f}",
+                f"{region['mean_probability']:.6f}",
+                f"{region['brightness_delta']:.6f}",
+                f"{region['vegetation_delta']:.6f}",
+            ])
+        )
+    (run_dir / "regions.csv").write_text("\n".join(csv_lines) + "\n", encoding="utf-8")
+
     base_url = f"/outputs/web_runs/{run_id}"
     response_payload = {
         "run_id": run_id,
@@ -789,6 +822,8 @@ def build_response_payload(
             "hybrid_score": f"{base_url}/hybrid_score.png",
             "mask": f"{base_url}/mask.png",
             "detailed_figure": detailed_figure_url,
+            "report_json": f"{base_url}/report.json",
+            "regions_csv": f"{base_url}/regions.csv",
         },
     }
     if context:

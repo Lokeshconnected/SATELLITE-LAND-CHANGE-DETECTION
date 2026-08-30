@@ -36,7 +36,20 @@
     .figure-wide { margin-top:14px; } .figure-wide img { width:100%; border-radius:14px; }
     .summary { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:20px; }
     .metric { padding:14px; border-radius:14px; background:#f1f4ed; } .metric strong { display:block; font:700 24px "Space Grotesk", sans-serif; } .metric span { color:var(--muted); font-size:12px; }
-    @media (max-width:800px) { main { padding-top:28px; } .form-grid { grid-template-columns:1fr 1fr; } .search-wrap { grid-column:1 / -1; } .form-grid button { width:100%; } .summary { grid-template-columns:repeat(2,1fr); } }
+    .result-head { display:flex; justify-content:space-between; gap:18px; align-items:end; }
+    .result-head h2 { margin:6px 0 0; font:700 clamp(25px, 4vw, 42px)/1 "Space Grotesk", sans-serif; letter-spacing:-.04em; }
+    .actions { display:flex; flex-wrap:wrap; gap:8px; }
+    .action { display:inline-block; padding:10px 12px; border:1px solid var(--line); border-radius:10px; color:var(--green); background:#f7f8f2; font-size:13px; font-weight:700; text-decoration:none; }
+    .action:hover { background:#eaf1e7; }
+    .insights { display:grid; grid-template-columns:1.15fr .85fr; gap:14px; margin-top:20px; }
+    .insight-card { padding:17px; border-radius:15px; background:#f1f4ed; }
+    .insight-card h3 { margin:0 0 10px; font:700 17px "Space Grotesk", sans-serif; }
+    .insight-card p { margin:6px 0; color:var(--muted); font-size:14px; line-height:1.5; }
+    .regions { display:grid; gap:8px; }
+    .region { padding:10px 12px; border-left:3px solid var(--gold); background:#fffdf8; border-radius:8px; font-size:13px; }
+    .region strong { display:block; margin-bottom:3px; }
+    .loading { color:var(--muted) !important; cursor:wait !important; }
+    @media (max-width:800px) { main { padding-top:28px; } .form-grid { grid-template-columns:1fr 1fr; } .search-wrap { grid-column:1 / -1; } .form-grid button { width:100%; } .summary { grid-template-columns:repeat(2,1fr); } .result-head { display:block; } .actions { margin-top:16px; } .insights { grid-template-columns:1fr; } }
     @media (max-width:520px) { main { width:min(100% - 20px, 1180px); } .panel, .result { padding:16px; border-radius:18px; } .form-grid { grid-template-columns:1fr; } .images { grid-template-columns:1fr; } .summary { grid-template-columns:1fr 1fr; } }
   </style>
 </head>
@@ -66,8 +79,9 @@
   </section>
 
   <section id="result" class="result" hidden>
-    <div class="eyebrow">Model result</div>
+    <div class="result-head"><div><div class="eyebrow">Model result</div><h2>What changed?</h2></div><div id="actions" class="actions"></div></div>
     <div id="summary" class="summary"></div>
+    <div class="insights"><div class="insight-card"><h3>Plain-language explanation</h3><div id="explanation"></div></div><div class="insight-card"><h3>Largest detected regions</h3><div id="regions" class="regions"></div></div></div>
     <div class="images">
       <figure><img id="before-image" alt="Before satellite image"><figcaption id="before-caption">Before image</figcaption></figure>
       <figure><img id="after-image" alt="After satellite image"><figcaption id="after-caption">After image</figcaption></figure>
@@ -84,6 +98,8 @@
   let selected = null;
   let marker = null;
   let area = null;
+  let imageryLayers = null;
+  let layerControl = null;
   const placeInput = document.querySelector("#place");
   const suggestions = document.querySelector("#suggestions");
   const status = document.querySelector("#status");
@@ -145,7 +161,17 @@
       document.querySelector("#before-image").src = asset("before"); document.querySelector("#after-image").src = asset("after"); document.querySelector("#probability-image").src = asset("probability"); document.querySelector("#overlay-image").src = asset("overlay_boxed"); document.querySelector("#detail-image").src = asset("detailed_figure");
       document.querySelector("#before-caption").textContent = `Before image (${data.years.before})`; document.querySelector("#after-caption").textContent = `After image (${data.years.after})`;
       const summary = data.summary; document.querySelector("#summary").innerHTML = `<div class="metric"><strong>${summary.changed_percent.toFixed(2)}%</strong><span>area marked changed</span></div><div class="metric"><strong>${summary.detected_regions}</strong><span>change regions</span></div><div class="metric"><strong>${summary.vegetation_loss_percent.toFixed(2)}%</strong><span>vegetation loss signal</span></div><div class="metric"><strong>${summary.water_related_percent.toFixed(2)}%</strong><span>water-related signal</span></div>`;
-      const imagery = data.context.imagery; document.querySelector("#context").innerHTML = `<span class="pill">${data.context.place_name}</span><span class="pill">Images: ${imagery.before.acquired_at} and ${imagery.after.acquired_at}</span><span class="pill">Cloud cover: ${imagery.before.cloud_cover.toFixed(1)}% / ${imagery.after.cloud_cover.toFixed(1)}%</span>`; document.querySelector("#context").hidden = false;
+      document.querySelector("#explanation").innerHTML = data.explanation.map(line => `<p>${line}</p>`).join("");
+      document.querySelector("#regions").innerHTML = data.top_regions.length ? data.top_regions.map(region => `<div class="region"><strong>${region.id}: ${region.label}</strong>${region.area_percent.toFixed(2)}% of the scene, mean model score ${region.mean_probability.toFixed(3)}</div>`).join("") : '<div class="region">No large region passed the final threshold.</div>';
+      document.querySelector("#actions").innerHTML = `<a class="action" href="${data.assets.detailed_figure}" download>Download figure</a><a class="action" href="${data.assets.report_json}" download>Download report</a><a class="action" href="${data.assets.regions_csv}" download>Download regions CSV</a>`;
+      const imagery = data.context.imagery; document.querySelector("#context").innerHTML = `<span class="pill">${data.context.place_name}</span><span class="pill">Coordinates: ${data.context.coordinates.lat.toFixed(4)}, ${data.context.coordinates.lon.toFixed(4)}</span><span class="pill">Images: ${imagery.before.acquired_at} and ${imagery.after.acquired_at}</span><span class="pill">Cloud cover: ${imagery.before.cloud_cover.toFixed(1)}% / ${imagery.after.cloud_cover.toFixed(1)}%</span><span class="pill">Model threshold: ${data.model.probability_threshold.toFixed(2)}</span>`; document.querySelector("#context").hidden = false;
+      const bounds = data.context.map_bounds; const imageBounds = [[bounds.south, bounds.west], [bounds.north, bounds.east]];
+      if (imageryLayers) Object.values(imageryLayers).forEach(layer => map.removeLayer(layer));
+      if (layerControl) map.removeControl(layerControl);
+      imageryLayers = { [`Before ${data.years.before}`]: L.imageOverlay(asset("before"), imageBounds, { opacity: .85 }), [`After ${data.years.after}`]: L.imageOverlay(asset("after"), imageBounds, { opacity: .85 }), "Detected changes": L.imageOverlay(asset("overlay"), imageBounds, { opacity: .78 }) };
+      imageryLayers[`After ${data.years.after}`].addTo(map);
+      layerControl = L.control.layers(null, imageryLayers, { collapsed: false }).addTo(map);
+      map.fitBounds(imageBounds, { padding: [24, 24] });
       document.querySelector("#result").hidden = false; setStatus("Analysis finished. The red and boxed areas are the detected changes."); document.querySelector("#result").scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (error) { setStatus(error.message, true); } finally { button.disabled = false; }
   });
