@@ -1,92 +1,154 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-
-<title>AI Satellite Land Change Detection</title>
-
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-
-<style>
-
-#map{
-height:90vh;
-width:100%;
-}
-
-button{
-padding:10px;
-font-size:16px;
-margin:10px;
-}
-
-</style>
-
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Satellite Change Detection</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    :root { --ink:#17231f; --muted:#65736c; --paper:#f5f1e8; --card:#fffdf8; --green:#1b614c; --gold:#e8b34d; --line:#d9ded6; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:radial-gradient(circle at 85% 0%, #e5ecd9 0, transparent 32%), var(--paper); font-family:"DM Sans", sans-serif; }
+    main { width:min(1180px, calc(100% - 32px)); margin:0 auto; padding:42px 0 64px; }
+    .eyebrow { color:var(--green); font-size:12px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; }
+    h1 { max-width:700px; margin:10px 0 12px; font:700 clamp(36px, 6vw, 70px)/.98 "Space Grotesk", sans-serif; letter-spacing:-.06em; }
+    .intro { max-width:680px; color:var(--muted); font-size:17px; line-height:1.55; }
+    .panel, .result { margin-top:30px; padding:24px; border:1px solid var(--line); border-radius:24px; background:rgba(255,253,248,.88); box-shadow:0 18px 45px rgba(31,52,40,.08); }
+    .form-grid { display:grid; grid-template-columns:2fr 1fr 1fr 1fr auto; gap:12px; align-items:end; }
+    label { display:block; margin-bottom:7px; color:var(--muted); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; }
+    input { width:100%; border:1px solid var(--line); border-radius:12px; background:white; color:var(--ink); padding:13px 14px; font:inherit; }
+    button { border:0; border-radius:12px; padding:14px 18px; background:var(--green); color:white; cursor:pointer; font:600 15px "DM Sans", sans-serif; white-space:nowrap; }
+    button:hover { background:#124936; } button:disabled { cursor:wait; opacity:.6; }
+    .suggestions { position:absolute; z-index:20; width:100%; margin-top:5px; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:white; box-shadow:0 12px 30px rgba(0,0,0,.12); }
+    .suggestion { display:block; width:100%; padding:11px 14px; border-radius:0; background:white; color:var(--ink); text-align:left; font-size:13px; }
+    .suggestion:hover { background:#edf4ec; }
+    .search-wrap { position:relative; }
+    .status { min-height:22px; margin:15px 0 0; color:var(--muted); font-size:14px; }
+    .status.error { color:#a33e31; }
+    #map { height:360px; margin-top:20px; border-radius:18px; overflow:hidden; background:#dde7dc; }
+    .context { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; color:var(--muted); font-size:13px; }
+    .pill { padding:8px 11px; border-radius:99px; background:#edf3e9; }
+    .images { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-top:24px; }
+    .images figure { margin:0; } figure img { display:block; width:100%; border-radius:14px; background:#e8ece6; } figcaption { margin:8px 3px 0; color:var(--muted); font-size:13px; font-weight:600; }
+    .figure-wide { margin-top:14px; } .figure-wide img { width:100%; border-radius:14px; }
+    .summary { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:20px; }
+    .metric { padding:14px; border-radius:14px; background:#f1f4ed; } .metric strong { display:block; font:700 24px "Space Grotesk", sans-serif; } .metric span { color:var(--muted); font-size:12px; }
+    @media (max-width:800px) { main { padding-top:28px; } .form-grid { grid-template-columns:1fr 1fr; } .search-wrap { grid-column:1 / -1; } .form-grid button { width:100%; } .summary { grid-template-columns:repeat(2,1fr); } }
+    @media (max-width:520px) { main { width:min(100% - 20px, 1180px); } .panel, .result { padding:16px; border-radius:18px; } .form-grid { grid-template-columns:1fr; } .images { grid-template-columns:1fr; } .summary { grid-template-columns:1fr 1fr; } }
+  </style>
 </head>
-
 <body>
+<main>
+  <div class="eyebrow">Satellite change detection</div>
+  <h1>See how a place changed over time.</h1>
+  <p class="intro">Choose a place and two years. The app finds satellite images for the same area, compares them with the U-Net model, and explains the result with simple visual evidence.</p>
 
-<h2>AI Land Change Detection</h2>
+  <section class="panel">
+    <form id="analysis-form">
+      <div class="form-grid">
+        <div class="search-wrap">
+          <label for="place">Place name</label>
+          <input id="place" autocomplete="off" placeholder="Mysore Palace" required>
+          <div id="suggestions" class="suggestions" hidden></div>
+        </div>
+        <div><label for="before-year">Before year</label><input id="before-year" type="number" min="2015" max="2026" value="2016" required></div>
+        <div><label for="after-year">After year</label><input id="after-year" type="number" min="2015" max="2026" value="2024" required></div>
+        <div><label for="radius">Area radius (km)</label><input id="radius" type="number" min="0.5" max="10" step="0.5" value="2.5" required></div>
+        <button id="analyze-button" type="submit">Analyze place</button>
+      </div>
+      <p id="status" class="status">Type a place, then choose one of the search results.</p>
+    </form>
+    <div id="map"></div>
+    <div id="context" class="context" hidden></div>
+  </section>
 
-<div id="map"></div>
-
-<button onclick="runAI()">Analyze Change</button>
-
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-
+  <section id="result" class="result" hidden>
+    <div class="eyebrow">Model result</div>
+    <div id="summary" class="summary"></div>
+    <div class="images">
+      <figure><img id="before-image" alt="Before satellite image"><figcaption id="before-caption">Before image</figcaption></figure>
+      <figure><img id="after-image" alt="After satellite image"><figcaption id="after-caption">After image</figcaption></figure>
+      <figure><img id="probability-image" alt="Model confidence heatmap"><figcaption>Model confidence heatmap</figcaption></figure>
+      <figure><img id="overlay-image" alt="Detected change overlay"><figcaption>Detected change overlay</figcaption></figure>
+    </div>
+    <div class="figure-wide"><img id="detail-image" alt="Detailed change explanation"></div>
+  </section>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+  const map = L.map("map").setView([20.5937, 78.9629], 5);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap contributors" }).addTo(map);
+  let selected = null;
+  let marker = null;
+  let area = null;
+  const placeInput = document.querySelector("#place");
+  const suggestions = document.querySelector("#suggestions");
+  const status = document.querySelector("#status");
+  const button = document.querySelector("#analyze-button");
 
-var map = L.map('map').setView([20,78],5)
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-maxZoom:19
-}).addTo(map)
-
-var marker
-var overlay
-
-map.on('click',function(e){
-
-if(marker){
-map.removeLayer(marker)
-}
-
-marker = L.marker(e.latlng).addTo(map)
-
-window.lat = e.latlng.lat
-window.lon = e.latlng.lng
-
-})
-
-
-function runAI(){
-
-if(!window.lat){
-alert("Click on the map first")
-return
-}
-
-var url = "http://127.0.0.1:8000/analyze?lat="+window.lat+"&lon="+window.lon
-
-fetch(url)
-.then(res=>res.blob())
-.then(blob=>{
-
-var imgUrl = URL.createObjectURL(blob)
-
-if(overlay){
-map.removeLayer(overlay)
-}
-
-overlay = L.imageOverlay(
-imgUrl,
-[[window.lat-0.05,window.lon-0.05],[window.lat+0.05,window.lon+0.05]]
-).addTo(map)
-
-})
-
-}
-
+  function setStatus(message, error = false) { status.textContent = message; status.className = error ? "status error" : "status"; }
+  function showPlace(place) {
+    selected = place; placeInput.value = place.name; suggestions.hidden = true;
+    if (marker) map.removeLayer(marker); if (area) map.removeLayer(area);
+    marker = L.marker([place.lat, place.lon]).addTo(map).bindPopup(place.name).openPopup();
+    const bounds = place.bounds || { south: place.lat - .025, north: place.lat + .025, west: place.lon - .025, east: place.lon + .025 };
+    area = L.rectangle([[bounds.south, bounds.west], [bounds.north, bounds.east]], { color: "#d89825", weight: 2, fillOpacity: .08 }).addTo(map);
+    map.fitBounds(area.getBounds(), { padding: [24, 24] });
+    setStatus("Place selected. Choose the years and click Analyze place.");
+  }
+  let searchTimer;
+  let searchController;
+  let searchNumber = 0;
+  placeInput.addEventListener("input", () => {
+    selected = null; clearTimeout(searchTimer); const query = placeInput.value.trim();
+    searchNumber += 1;
+    if (searchController) searchController.abort();
+    if (query.length < 3) { suggestions.hidden = true; setStatus("Type at least 3 letters to search for a place."); return; }
+    suggestions.innerHTML = '<div class="suggestion loading">Searching for places...</div>';
+    suggestions.hidden = false;
+    setStatus("Searching for places...");
+    const currentSearch = searchNumber;
+    searchTimer = setTimeout(async () => {
+      try {
+        searchController = new AbortController();
+        const response = await fetch(`/api/search-place?q=${encodeURIComponent(query)}`, { signal: searchController.signal, cache: "no-store" });
+        const data = await response.json(); if (!response.ok) throw new Error(data.detail || "Place search failed.");
+        if (currentSearch !== searchNumber) return;
+        suggestions.innerHTML = "";
+        data.results.forEach(place => { const item = document.createElement("button"); item.type = "button"; item.className = "suggestion"; item.textContent = place.name; item.onclick = () => showPlace(place); suggestions.appendChild(item); });
+        suggestions.hidden = false;
+        setStatus(`${data.results.length} place result${data.results.length === 1 ? "" : "s"} found. Select one.`);
+      } catch (error) {
+        if (error.name === "AbortError") return;
+        suggestions.innerHTML = '<div class="suggestion loading">No places found. Try a larger town or landmark.</div>';
+        suggestions.hidden = false;
+        setStatus(error.message, true);
+      }
+    }, 350);
+  });
+  document.addEventListener("click", event => {
+    if (!event.target.closest(".search-wrap")) suggestions.hidden = true;
+  });
+  document.querySelector("#analysis-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!selected) { setStatus("Select a place from the search results first.", true); return; }
+    const form = new FormData(); form.append("place_name", selected.name); form.append("lat", selected.lat); form.append("lon", selected.lon);
+    form.append("before_year", document.querySelector("#before-year").value); form.append("after_year", document.querySelector("#after-year").value); form.append("buffer_km", document.querySelector("#radius").value);
+    button.disabled = true; setStatus("Finding satellite images and running the model. This can take a little while.");
+    try {
+      const response = await fetch("/api/analyze-place", { method: "POST", body: form });
+      const data = await response.json(); if (!response.ok) throw new Error(data.detail || "Analysis failed.");
+      const cache = `?run=${data.run_id}`; const asset = name => data.assets[name] + cache;
+      document.querySelector("#before-image").src = asset("before"); document.querySelector("#after-image").src = asset("after"); document.querySelector("#probability-image").src = asset("probability"); document.querySelector("#overlay-image").src = asset("overlay_boxed"); document.querySelector("#detail-image").src = asset("detailed_figure");
+      document.querySelector("#before-caption").textContent = `Before image (${data.years.before})`; document.querySelector("#after-caption").textContent = `After image (${data.years.after})`;
+      const summary = data.summary; document.querySelector("#summary").innerHTML = `<div class="metric"><strong>${summary.changed_percent.toFixed(2)}%</strong><span>area marked changed</span></div><div class="metric"><strong>${summary.detected_regions}</strong><span>change regions</span></div><div class="metric"><strong>${summary.vegetation_loss_percent.toFixed(2)}%</strong><span>vegetation loss signal</span></div><div class="metric"><strong>${summary.water_related_percent.toFixed(2)}%</strong><span>water-related signal</span></div>`;
+      const imagery = data.context.imagery; document.querySelector("#context").innerHTML = `<span class="pill">${data.context.place_name}</span><span class="pill">Images: ${imagery.before.acquired_at} and ${imagery.after.acquired_at}</span><span class="pill">Cloud cover: ${imagery.before.cloud_cover.toFixed(1)}% / ${imagery.after.cloud_cover.toFixed(1)}%</span>`; document.querySelector("#context").hidden = false;
+      document.querySelector("#result").hidden = false; setStatus("Analysis finished. The red and boxed areas are the detected changes."); document.querySelector("#result").scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (error) { setStatus(error.message, true); } finally { button.disabled = false; }
+  });
 </script>
-
 </body>
 </html>

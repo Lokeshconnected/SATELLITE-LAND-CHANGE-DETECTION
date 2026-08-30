@@ -99,15 +99,15 @@ def draw_summary(ax, result):
     prob_p95 = float(np.percentile(probability, 95))
 
     ax.axis("off")
-    ax.set_title("What The Deep Model Actually Did", loc="left", fontsize=15, weight="bold")
+    ax.set_title("What The Model Did", loc="left", fontsize=15, weight="bold")
 
     rows = [
-        ("Model", "U-Net segmentation network"),
-        ("Input to model", f"{result['input_shape'][0]} channels: 2015 RGB + 2026 RGB"),
-        ("Model resize", "input resized to 256 x 256"),
-        ("Output", "one change probability per pixel"),
-        ("Decision rule", f"change if probability >= {THRESHOLD:.2f}"),
-        ("Predicted change", f"{changed_percent:.2f}% of pixels"),
+        ("Model", "U-Net change detector"),
+        ("Input", f"{result['input_shape'][0]} channels: 2015 RGB + 2026 RGB"),
+        ("Resize", "image resized to 256 x 256"),
+        ("Output", "a change score for each pixel"),
+        ("Rule", f"mark change if score >= {THRESHOLD:.2f}"),
+        ("Change found", f"{changed_percent:.2f}% of pixels"),
         ("Changed pixels", f"{changed_pixels} of {total_pixels}"),
         ("Probability min", f"{prob_min:.4f}"),
         ("Probability mean", f"{prob_mean:.4f}"),
@@ -123,14 +123,12 @@ def draw_summary(ax, result):
 
     if changed_pixels == 0:
         conclusion = (
-            "Conclusion shown by the model: with the saved weights and a 0.50 threshold, "
-            "the U-Net did not mark any pixel as changed. The heatmap still shows the raw "
-            "confidence values, so you can see how close the model came to predicting change."
+            "Simple result: the model did not mark any pixel as changed. "
+            "The heatmap still shows where the model felt more unsure."
         )
     else:
         conclusion = (
-            "Conclusion shown by the model: red overlay pixels are the areas where the U-Net "
-            "probability crossed the 0.50 change threshold."
+            "Simple result: the red area shows where the model thinks the land changed."
         )
 
     ax.text(
@@ -159,27 +157,27 @@ def create_figure():
     ax_prob = fig.add_subplot(grid[1, 0])
     ax_overlay = fig.add_subplot(grid[1, 1])
 
-    fig.suptitle("Actual Deep Learning Output: U-Net Change Detection", fontsize=22, weight="bold", y=0.985)
+    fig.suptitle("Deep Learning Output: Change Detection", fontsize=22, weight="bold", y=0.985)
 
     ax_2015.imshow(result["display15"])
-    ax_2015.set_title("Input Part 1: 2015 RGB", fontsize=13, weight="bold")
+    ax_2015.set_title("Before Image: 2015 RGB", fontsize=13, weight="bold")
 
     ax_2026.imshow(result["display26"])
-    ax_2026.set_title("Input Part 2: 2026 RGB", fontsize=13, weight="bold")
+    ax_2026.set_title("After Image: 2026 RGB", fontsize=13, weight="bold")
 
     prob_plot = ax_prob.imshow(result["probability_256"], cmap="magma", vmin=0, vmax=1)
-    ax_prob.set_title("Raw U-Net Probability Map", fontsize=13, weight="bold")
+    ax_prob.set_title("Model Confidence Map", fontsize=13, weight="bold")
     cbar = fig.colorbar(prob_plot, ax=ax_prob, fraction=0.046, pad=0.02)
     cbar.set_label("Predicted probability of change", fontsize=9)
 
     ax_overlay.imshow(overlay)
-    ax_overlay.set_title(f"Final AI Mask Overlay: threshold {THRESHOLD:.2f}", fontsize=13, weight="bold")
+    ax_overlay.set_title(f"Final Change Overlay: threshold {THRESHOLD:.2f}", fontsize=13, weight="bold")
 
     if result["mask_full"].sum() == 0:
         ax_overlay.text(
             0.5,
             0.5,
-            "No pixels crossed the 0.50 threshold",
+            "No pixels crossed the change threshold",
             transform=ax_overlay.transAxes,
             ha="center",
             va="center",
