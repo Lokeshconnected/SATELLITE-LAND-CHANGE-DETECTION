@@ -106,6 +106,17 @@
   const button = document.querySelector("#analyze-button");
 
   function setStatus(message, error = false) { status.textContent = message; status.className = error ? "status error" : "status"; }
+  async function readApiResponse(response, fallbackMessage) {
+    const body = await response.text();
+    let data;
+    try { data = body ? JSON.parse(body) : {}; }
+    catch {
+      const serverMessage = body.replace(/\s+/g, " ").trim().slice(0, 180);
+      throw new Error(serverMessage ? `Server error (${response.status}): ${serverMessage}` : `${fallbackMessage} (HTTP ${response.status}).`);
+    }
+    if (!response.ok) throw new Error(data.detail || `${fallbackMessage} (HTTP ${response.status}).`);
+    return data;
+  }
   function showPlace(place) {
     selected = place; placeInput.value = place.name; suggestions.hidden = true;
     if (marker) map.removeLayer(marker); if (area) map.removeLayer(area);
@@ -131,7 +142,7 @@
       try {
         searchController = new AbortController();
         const response = await fetch(`/api/search-place?q=${encodeURIComponent(query)}`, { signal: searchController.signal, cache: "no-store" });
-        const data = await response.json(); if (!response.ok) throw new Error(data.detail || "Place search failed.");
+        const data = await readApiResponse(response, "Place search failed");
         if (currentSearch !== searchNumber) return;
         suggestions.innerHTML = "";
         data.results.forEach(place => { const item = document.createElement("button"); item.type = "button"; item.className = "suggestion"; item.textContent = place.name; item.onclick = () => showPlace(place); suggestions.appendChild(item); });
@@ -156,7 +167,7 @@
     button.disabled = true; setStatus("Finding satellite images and running the model. This can take a little while.");
     try {
       const response = await fetch("/api/analyze-place", { method: "POST", body: form });
-      const data = await response.json(); if (!response.ok) throw new Error(data.detail || "Analysis failed.");
+      const data = await readApiResponse(response, "Analysis failed");
       const cache = `?run=${data.run_id}`; const asset = name => data.assets[name] + cache;
       document.querySelector("#before-image").src = asset("before"); document.querySelector("#after-image").src = asset("after"); document.querySelector("#probability-image").src = asset("probability"); document.querySelector("#overlay-image").src = asset("overlay_boxed"); document.querySelector("#detail-image").src = asset("detailed_figure");
       document.querySelector("#before-caption").textContent = `Before image (${data.years.before})`; document.querySelector("#after-caption").textContent = `After image (${data.years.after})`;

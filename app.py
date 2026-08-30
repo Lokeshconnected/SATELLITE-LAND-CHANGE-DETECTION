@@ -1,5 +1,6 @@
 import io
 import json
+import logging
 import os
 import uuid
 from datetime import datetime
@@ -17,9 +18,9 @@ import numpy as np
 import requests
 import torch
 import torch.nn.functional as F
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps
 
@@ -44,6 +45,7 @@ SENTINEL_START_DATE = "2015-06-27"
 
 
 app = FastAPI(title="Satellite Change Detection AI")
+logger = logging.getLogger(__name__)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -54,6 +56,16 @@ app.add_middleware(
 
 OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
 app.mount("/outputs", StaticFiles(directory=str(BASE_DIR / "outputs")), name="outputs")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Keep API failures JSON so browser clients can show a useful error."""
+    logger.exception("Unhandled error while processing %s", request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "The server could not complete this request. Check the deployment logs and try again."},
+    )
 
 
 def load_model() -> UNet:
