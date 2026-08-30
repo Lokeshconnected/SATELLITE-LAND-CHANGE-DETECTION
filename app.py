@@ -34,7 +34,8 @@ MODEL_INPUT_SIZE = (256, 256)
 MODEL_THRESHOLD = 0.5
 FINAL_THRESHOLD_FLOOR = 0.12
 MAX_UPLOAD_SIZE_MB = 20
-EARTH_ENGINE_PROJECT = "satellite-change-ai-507112"
+EARTH_ENGINE_PROJECT = os.getenv("EARTH_ENGINE_PROJECT", "satellite-change-ai-507112")
+EARTH_ENGINE_SERVICE_ACCOUNT_JSON = os.getenv("EARTH_ENGINE_SERVICE_ACCOUNT_JSON", "").strip()
 SEARCH_USER_AGENT = "satellite-change-detection-ai/1.0"
 MAX_MAP_RESULTS = 5
 DEFAULT_FETCH_DIMENSION = 768
@@ -46,7 +47,7 @@ app = FastAPI(title="Satellite Change Detection AI")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -76,13 +77,25 @@ def ensure_earth_engine_initialized() -> None:
         return
 
     try:
-        ee.Initialize(project=EARTH_ENGINE_PROJECT)
+        if EARTH_ENGINE_SERVICE_ACCOUNT_JSON:
+            service_account_info = json.loads(EARTH_ENGINE_SERVICE_ACCOUNT_JSON)
+            service_account_email = service_account_info.get("client_email")
+            if not service_account_email:
+                raise ValueError("The Earth Engine service-account JSON has no client_email.")
+            credentials = ee.ServiceAccountCredentials(
+                email=service_account_email,
+                key_data=EARTH_ENGINE_SERVICE_ACCOUNT_JSON,
+            )
+            ee.Initialize(credentials=credentials, project=EARTH_ENGINE_PROJECT)
+        else:
+            ee.Initialize(project=EARTH_ENGINE_PROJECT)
     except Exception as exc:
         raise HTTPException(
             status_code=503,
             detail=(
                 "Earth Engine is not available. Make sure your authenticated account has access to "
-                f"the Google Cloud project '{EARTH_ENGINE_PROJECT}'."
+                f"the Google Cloud project '{EARTH_ENGINE_PROJECT}' and that hosted deployments have "
+                "EARTH_ENGINE_SERVICE_ACCOUNT_JSON configured."
             ),
         ) from exc
 
