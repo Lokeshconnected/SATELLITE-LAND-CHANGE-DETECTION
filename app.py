@@ -5,7 +5,7 @@ import os
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 os.environ.setdefault("MPLCONFIGDIR", os.path.join(os.getcwd(), ".matplotlib_cache"))
 
@@ -79,8 +79,17 @@ def load_model() -> UNet:
     return model
 
 
-MODEL = load_model()
+# Do not load the model during module import. Hosted platforms must see the web
+# server bind its port promptly; inference can load the small model on demand.
+MODEL: Optional[UNet] = None
 EE_INITIALIZED = False
+
+
+def get_model() -> UNet:
+    global MODEL
+    if MODEL is None:
+        MODEL = load_model()
+    return MODEL
 
 
 def ensure_earth_engine_initialized() -> None:
@@ -433,7 +442,7 @@ def run_unet_probability(before_norm: np.ndarray, after_norm: np.ndarray) -> Tup
     resized = F.interpolate(input_tensor, size=MODEL_INPUT_SIZE, mode="bilinear", align_corners=False)
 
     with torch.no_grad():
-        logits = MODEL(resized)
+        logits = get_model()(resized)
         probability_256 = torch.sigmoid(logits).squeeze().cpu().numpy()
 
     return probability_256, resized.squeeze(0).numpy()
