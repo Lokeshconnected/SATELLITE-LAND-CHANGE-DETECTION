@@ -5,3 +5,7 @@ preprocessed/
 outputs/
 *.pyc
 .DS_Store
+.venv/
+.env
+.env.*
+!.env.example

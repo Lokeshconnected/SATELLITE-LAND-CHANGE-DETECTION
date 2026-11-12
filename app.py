@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageDraw, ImageOps
 
@@ -24,7 +24,7 @@ MODEL_INPUT_SIZE = (256, 256)
 MODEL_THRESHOLD = 0.5
 FINAL_THRESHOLD_FLOOR = 0.12
 MAX_UPLOAD_SIZE_MB = 20
-EARTH_ENGINE_PROJECT = os.getenv("EARTH_ENGINE_PROJECT", "satellite-change-ai-507112")
+EARTH_ENGINE_PROJECT = os.getenv("EARTH_ENGINE_PROJECT", "satellite-change-ai")
 EARTH_ENGINE_SERVICE_ACCOUNT_JSON = os.getenv("EARTH_ENGINE_SERVICE_ACCOUNT_JSON", "").strip()
 SEARCH_USER_AGENT = "satellite-change-detection-ai/1.0"
 MAX_MAP_RESULTS = 5
@@ -857,6 +857,24 @@ def home() -> HTMLResponse:
     if not INDEX_PATH.exists():
         raise HTTPException(status_code=500, detail="index.html is missing.")
     return HTMLResponse(INDEX_PATH.read_text(encoding="utf-8"))
+
+
+@app.get("/dashboard.js", response_class=PlainTextResponse)
+def dashboard_script() -> PlainTextResponse:
+    return PlainTextResponse((BASE_DIR / "dashboard.js").read_text(encoding="utf-8"), media_type="application/javascript")
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+def robots(request: Request) -> PlainTextResponse:
+    base_url = str(request.base_url).rstrip("/")
+    return PlainTextResponse(f"User-agent: *\nAllow: /\nSitemap: {base_url}/sitemap.xml\n")
+
+
+@app.get("/sitemap.xml", response_class=PlainTextResponse)
+def sitemap(request: Request) -> PlainTextResponse:
+    base_url = str(request.base_url).rstrip("/")
+    xml = f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>{base_url}/</loc></url></urlset>'
+    return PlainTextResponse(xml, media_type="application/xml")
 
 
 @app.get("/api/health")

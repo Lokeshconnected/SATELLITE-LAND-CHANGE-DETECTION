@@ -1,0 +1,9 @@
+.git
+.venv
+venv
+__pycache__
+outputs/web_runs/*
+dataset/
+sentinel_data/
+change_model.pth
+.DS_Store
