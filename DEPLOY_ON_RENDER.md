@@ -19,7 +19,7 @@ Google's service-account setup guide: <https://developers.google.com/earth-engin
 1. Sign in at [Render](https://render.com/) with the GitHub account that can access `Lokeshconnected/SATELLITE-LAND-CHANGE-DETECTION`.
 2. Choose **New → Blueprint** and select that repository and the `main` branch.
 3. Render reads `render.yaml`. Review that the service plan says **Free**, then create the service.
-4. The Blueprint pins Python 3.12.11 because the pinned Rasterio release requires Python 3.12 or newer. The first build installs the Python requirements and may take several minutes. Wait for the deploy to finish.
+4. The Blueprint requests Python 3.12.11. Rasterio is pinned to 1.4.4, which also supports Python 3.11 in case Render still uses its older configured runtime during a build. The first build installs the Python requirements and may take several minutes. Wait for the deploy to finish.
 
 ## 3. Add the Earth Engine key as a secret
 
