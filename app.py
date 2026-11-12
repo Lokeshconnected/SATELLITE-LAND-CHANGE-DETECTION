@@ -412,6 +412,7 @@ def pick_sentinel_image(lat: float, lon: float, year: int, buffer_meters: float)
     try:
         count = int(collection.size().getInfo())
     except Exception as exc:
+        logger.exception("Earth Engine Sentinel-2 collection query failed for year %s", year)
         raise HTTPException(status_code=503, detail="Failed to query satellite imagery for the selected place.") from exc
 
     if count == 0:
@@ -424,6 +425,7 @@ def pick_sentinel_image(lat: float, lon: float, year: int, buffer_meters: float)
         try:
             fallback_count = int(fallback_collection.size().getInfo())
         except Exception as exc:
+            logger.exception("Earth Engine fallback Sentinel-2 query failed for year %s", year)
             raise HTTPException(status_code=503, detail="Failed to query fallback satellite imagery.") from exc
         if fallback_count == 0:
             raise HTTPException(
