@@ -17,7 +17,7 @@ Open <http://127.0.0.1:8000>. Place-based analysis requires Google Earth Engine 
 
 ## Deploy
 
-The repository includes a `render.yaml` blueprint for Render. It also includes a Dockerfile for container-based hosting such as Google Cloud Run. Cloud Run requires a Google Cloud project with billing enabled, the Cloud Run and Cloud Build APIs enabled, and a runtime service account authorized to use Earth Engine.
+The repository includes a `render.yaml` blueprint for a free Render web service and a step-by-step [deployment guide](DEPLOY_ON_RENDER.md). The free host sleeps when idle and has limited memory; analysis also requires a private Earth Engine service-account key configured in Render.
 
 ## Search indexing
 
